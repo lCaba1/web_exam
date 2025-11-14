@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container my-4">
+
+  <!-- Основная информация о мероприятии -->
+  <div class="card mb-4 shadow-sm p-3">
+    <div class="row g-0 align-items-center">
+      <div class="col-md-4 text-center">
+        <img src="{{ url_for('static', filename='uploads/' ~ event.image_filename) }}" 
+            alt="{{ event.name }}" class="img-fluid rounded mb-3 mb-md-0">
+      </div>
+      <div class="col-md-8">
+        <div class="card-body">
+          <h2 class="card-title mb-3">{{ event.name }}</h2>
+          
+          <ul class="list-unstyled mb-3">
+            <li><strong>Дата:</strong> {{ event.date.strftime('%d.%m.%Y') }}</li>
+            <li><strong>Место:</strong> {{ event.place }}</li>
+            <li>
+              <strong>Волонтёров:</strong> {{ accepted_count }} / {{ event.volunteers_required }}
+              {% if accepted_count >= event.volunteers_required %}
+                <span class="badge bg-secondary ms-2">Набор закрыт</span>
+              {% else %}
+                <span class="badge bg-success ms-2">Набор открыт</span>
+              {% endif %}
+            </li>
+            <li>
+              <strong>Организатор:</strong> 
+              {{ event.organizer.first_name }} {{ event.organizer.last_name }}
+              {% if event.organizer.middle_name %} {{ event.organizer.middle_name }}{% endif %}
+            </li>
+          </ul>
+
+          <div class="mt-3">
+            <h5>Описание</h5>
+            <div class="markdown-body">{{ html_description | safe }}</div>
+          </div>
+
+          <!-- Кнопки управления -->
+          <div class="mt-3 d-flex gap-2">
+            {% if current_user.is_authenticated and current_user.role.name in ['admin', 'moderator'] %}
+              <a href="{{ url_for('main.edit_event', event_id=event.id) }}" class="btn btn-warning">
+                Редактировать
+              </a>
+            {% endif %}
+            {% if current_user.is_authenticated and current_user.role.name == 'admin' %}
+              <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                Удалить
+              </button>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Блок регистрации -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header"><h4>Регистрация</h4></div>
+    <div class="card-body">
+      {% if current_user.is_authenticated %}
+        {% if user_registration %}
+          <div class="alert alert-info">
+            <p><strong>Статус:</strong>
+              {% if user_registration.status == 'accepted' %}
+                <span class="text-success">Принята</span>
+              {% elif user_registration.status == 'pending' %}
+                <span class="text-warning">На рассмотрении</span>
+              {% else %}
+                <span class="text-danger">Отклонена</span>
+              {% endif %}
+            </p>
+            <p><strong>Контакт:</strong> {{ user_registration.contact_info }}</p>
+            <p><strong>Дата подачи:</strong> {{ user_registration.registered_at.strftime('%d.%m.%Y %H:%M') }}</p>
+          </div>
+        {% elif accepted_count < event.volunteers_required %}
+          {% if current_user.role.name == 'user' %}
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#registrationModal">
+              Подать заявку
+            </button>
+          {% else %}
+            <div class="alert alert-info">Администраторы и модераторы не могут регистрироваться</div>
+          {% endif %}
+        {% else %}
+          <div class="alert alert-warning">Регистрация закрыта: достигнут лимит волонтёров</div>
+        {% endif %}
+      {% else %}
+        <div class="alert alert-warning">
+          Для регистрации нужно войти
+          <a href="{{ url_for('auth.login', next=url_for('main.event_detail', event_id=event.id)) }}" class="btn btn-primary ms-2">Войти</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Списки волонтёров -->
+  {% if current_user.is_authenticated and current_user.role.name in ['admin', 'moderator'] %}
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header"><h4>Подтверждённые волонтёры ({{ accepted_count }})</h4></div>
+      <div class="card-body">
+        {% if accepted_registrations %}
+          <ul class="list-group list-group-flush">
+            {% for reg in accepted_registrations %}
+              <li class="list-group-item">
+                {{ reg.volunteer.last_name }} {{ reg.volunteer.first_name }}
+                {% if reg.volunteer.middle_name %} {{ reg.volunteer.middle_name }}{% endif %}
+                &mdash; {{ reg.contact_info }}
+                <small class="text-muted">({{ reg.registered_at.strftime('%d.%m.%Y %H:%M') }})</small>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="alert alert-secondary">Нет подтверждённых регистраций</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if pending_registrations %}
+      <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-warning"><h4>Заявки на рассмотрении ({{ pending_registrations|length }})</h4></div>
+        <div class="card-body">
+          <ul class="list-group list-group-flush">
+            {% for reg in pending_registrations %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  {{ reg.volunteer.last_name }} {{ reg.volunteer.first_name }}
+                  {% if reg.volunteer.middle_name %} {{ reg.volunteer.middle_name }}{% endif %}
+                  &mdash; {{ reg.contact_info }}
+                  <small class="text-muted d-block">{{ reg.registered_at.strftime('%d.%m.%Y %H:%M') }}</small>
+                </div>
+                <div class="btn-group btn-group-sm">
+                  <a href="{{ url_for('main.accept_registration', reg_id=reg.id) }}" class="btn btn-success">Принять</a>
+                  <a href="{{ url_for('main.reject_registration', reg_id=reg.id) }}" class="btn btn-danger">Отклонить</a>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+
+  <!-- Модальное окно регистрации -->
+  {% if current_user.is_authenticated and not user_registration and accepted_count < event.volunteers_required %}
+    <div class="modal fade" id="registrationModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Регистрация на мероприятие</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form method="POST" action="{{ url_for('main.register', event_id=event.id) }}">
+              <div class="mb-3">
+                <label class="form-label">Контактная информация</label>
+                <input type="text" name="contact_info" class="form-control" required
+                       placeholder="Телефон, email или другой способ связи">
+                <div class="form-text">Как с вами связаться для подтверждения участия</div>
+              </div>
+              <button type="submit" class="btn btn-primary">Отправить</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Модальное окно удаления -->
+  {% if current_user.is_authenticated and current_user.role.name == 'admin' %}
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Удаление мероприятия</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p>Вы уверены, что хотите удалить <strong>"{{ event.name }}"</strong>?</p>
+            <p class="text-danger">Это действие нельзя отменить. Будут удалены все регистрации.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+            <form action="{{ url_for('main.delete_event', event_id=event.id) }}" method="POST">
+              <button type="submit" class="btn btn-danger">Удалить</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

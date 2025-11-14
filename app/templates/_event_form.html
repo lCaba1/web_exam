@@ -1,0 +1,52 @@
+{% macro render_event_form(form, show_image_field=False, event=None) %}
+<form method="POST" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+
+    {% set fields = ['name', 'date', 'place', 'volunteers_required', 'description'] %}
+    {% for field_name in fields %}
+        {% set field = form[field_name] %}
+        <div class="form-group mb-3">
+            <label for="{{ field.id }}">{{ field.label }}</label>
+            {% if field_name == 'description' %}
+                {{ field(class="form-control", id=field.id, rows=5) }}
+            {% else %}
+                {{ field(class="form-control", id=field.id) }}
+            {% endif %}
+            {% if field.errors %}
+                <small class="text-danger">{{ field.errors[0] }}</small>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    {% if show_image_field %}
+        <div class="form-group mb-3">
+            <label for="{{ form.image.id }}">{{ form.image.label }}</label>
+            {{ form.image(class="form-control", id=form.image.id, accept=".jpg,.jpeg,.png") }}
+
+            {% if event and event.image_filename %}
+                <input type="hidden" name="existing_image" value="{{ event.image_filename }}">
+                <div class="mt-2">
+                    <p>Текущее изображение:</p>
+                    <img src="{{ url_for('static', filename='uploads/' + event.image_filename) }}"
+                         alt="Current Image" class="img-thumbnail" style="max-width: 200px;">
+                </div>
+                <div class="form-text">Оставьте поле пустым, чтобы сохранить текущее изображение</div>
+            {% else %}
+                <div class="form-text">Загрузите изображение в формате JPG, JPEG или PNG</div>
+            {% endif %}
+
+            {% if form.image.errors %}
+                <small class="text-danger">{{ form.image.errors[0] }}</small>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <a href="{{ url_for('main.event_detail', event_id=event.id) if event else url_for('main.index') }}" 
+           class="btn btn-secondary">Отмена</a>
+    </div>
+</form>
+
+<script src="{{ url_for('static', filename='js/event_form.js') }}"></script>
+{% endmacro %}
